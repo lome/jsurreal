@@ -17,16 +17,13 @@ import org.lome.jsurreal.annotation.Variable;
 import org.lome.jsurreal.protocol.SurrealDBClient;
 import org.lome.jsurreal.protocol.command.QueryRequest;
 import org.lome.jsurreal.protocol.command.QueryResponse;
-import org.lome.jsurreal.protocol.command.QueryResponseItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.function.Function;
 
 import static net.bytebuddy.implementation.MethodDelegation.to;
@@ -199,7 +196,4 @@ public class SurrealRepositoryFactory {
         }
     }
 
-    private static Class<?> getParametrized(Class<?> collectionType) {
-        return null;
-    }
 }

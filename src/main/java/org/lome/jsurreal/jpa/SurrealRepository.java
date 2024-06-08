@@ -4,7 +4,6 @@ import org.lome.jsurreal.protocol.SurrealDBClient;
 import org.lome.jsurreal.protocol.command.QueryRequest;
 import org.lome.jsurreal.protocol.exception.SurrealCallException;
 
-import javax.swing.text.html.Option;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
