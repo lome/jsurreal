@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.lome.jsurreal.util.JsonMapperProvider;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
@@ -11,7 +12,7 @@ import java.util.List;
 
 public class SurrealResponse {
 
-    final static ObjectMapper objectMapper = new ObjectMapper();
+    final static ObjectMapper objectMapper = JsonMapperProvider.getObjectMapper();
 
     private String id;
     private Object result;

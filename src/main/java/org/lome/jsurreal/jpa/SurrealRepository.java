@@ -1,20 +1,23 @@
 package org.lome.jsurreal.jpa;
 
 import org.lome.jsurreal.protocol.SurrealDBClient;
+import org.lome.jsurreal.protocol.command.QueryRequest;
 import org.lome.jsurreal.protocol.exception.SurrealCallException;
 
+import javax.swing.text.html.Option;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public interface SurrealRepository<T> {
 
-    private EntityMapper<T> getEntityMapper(){
+    default EntityMapper<T> getEntityMapper(){
         throw new RuntimeException("Not implemented!");
     }
 
-    private SurrealDBClient getClient(){
+    default SurrealDBClient getClient(){
         throw new RuntimeException("Not implemented!");
     }
 
@@ -41,30 +44,31 @@ public interface SurrealRepository<T> {
     /**************** Repository default Methods ****************/
 
     default Optional<T> findById(String id) throws SurrealCallException {
-        return Optional.ofNullable(getClient().select(id, getEntityClass()))
+        return Optional.ofNullable(getClient().select(id, getEntityMapper().proxyClass))
                 .map(this::unwrap);
     }
 
     default Iterable<T> findAll() throws SurrealCallException {
-        return getClient().selectTable(getTableName(), getEntityClass());
+        return getClient().selectTable(getTableName(), getEntityMapper().proxyClass).stream()
+                .map(this::unwrap).toList();
     }
 
     default T save(T element) throws SurrealCallException {
-        return getClient().insert(getTableName(), List.of(element)).getFirst();
+        return unwrap(getClient().insert(getTableName(), List.of(wrap(element))).getFirst());
     }
 
     default T update(T element) throws SurrealCallException {
         String entityId = getEntityId(element);
         if (entityId == null) throw new RuntimeException("Null entity id");
-        return getClient().update(entityId, element);
+        return unwrap(getClient().update(entityId, wrap(element)));
     }
 
     default void deleteAll() throws SurrealCallException {
-        getClient().deleteTable(getTableName(), getEntityClass());
+        getClient().deleteTable(getTableName(), getEntityMapper().proxyClass);
     }
 
     default void deleteById(String id) throws SurrealCallException {
-        getClient().delete(id, getEntityClass());
+        getClient().delete(id, getEntityMapper().proxyClass);
     }
 
     default void delete(T element) throws SurrealCallException {
@@ -88,6 +92,11 @@ public interface SurrealRepository<T> {
                         throw new RuntimeException(ex);
                     }
                 }).collect(Collectors.toList());
+    }
+
+    default Long count() throws SurrealCallException {
+        return Long.parseLong(getClient().query(new QueryRequest("SELECT count() FROM $table").withVariable("table", getTableName()))
+                .getFirst().getResultAs(Map.class).get("count").toString());
     }
 
 

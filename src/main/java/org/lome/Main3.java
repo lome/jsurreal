@@ -1,23 +1,25 @@
 package org.lome;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.lome.jsurreal.protocol.command.InfoResponse;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import org.lome.jsurreal.annotation.Query;
+import org.lome.jsurreal.annotation.Variable;
+import org.lome.jsurreal.jpa.SurrealRepository;
+import org.lome.jsurreal.jpa.SurrealRepositoryFactory;
+import org.lome.jsurreal.protocol.SurrealDBClient;
 import org.lome.jsurreal.protocol.command.QueryRequest;
 import org.lome.jsurreal.protocol.command.SignIn;
 import org.lome.jsurreal.protocol.exception.RequestLimitExceededException;
-import org.lome.jsurreal.protocol.SurrealDBClient;
 import org.lome.jsurreal.protocol.exception.SurrealCallException;
 import org.lome.jsurreal.util.JsonMapperProvider;
 
 import java.io.IOException;
-import java.util.Map;
+import java.util.List;
 
 
-public class Main {
+public class Main3 {
 
     final static ObjectMapper objectMapper = JsonMapperProvider.getObjectMapper();
 
@@ -27,30 +29,38 @@ public class Main {
             client.signIn(new SignIn("root","root"));
             printJson(client.query(new QueryRequest("DEFINE NAMESPACE IF NOT EXISTS example;")));
             printJson(client.query(new QueryRequest("USE NS example; DEFINE DATABASE IF NOT EXISTS example_db;")));
-            client.use("example", "example_db");
-            printJson((client.info()));
+            client.use("example","test");
 
-            Person alice = new Person("Alice");
-            alice = client.create("persons", alice).getFirst();
+            PersonSurrealRepository repo = SurrealRepositoryFactory.surrealRepository(client, PersonSurrealRepository.class, Person.class);
+            Person alice = repo.save(new Person("alice"));
+            printJson(alice);
 
-            printJson(client.select(alice.getId(), alice.getClass()));
-            printJson(client.selectTable("persons", alice.getClass()));
+            printJson(repo.findAlice());
+            printJson(repo.findByName("alice"));
 
-            printJson(client.merge(alice.getId(), alice.getClass(), Map.of("foo","bar")));
-            printJson(client.mergeTable("persons", alice.getClass(), Map.of("bar","baz")));
+            Person alice2 = repo.save(new Person("alice"));
 
-            alice.setName("Bob");
-            printJson(client.update(alice.getId(), alice));
-            printJson(client.updateTable("persons", alice));
+            repo.findAllByName("alice").forEach(found -> {
+                System.out.println("FOUND!! ");
+                printJson(found);
+            });
 
-            //printJson(client.delete(alice.getId(), alice.getClass()));
-            //printJson(client.deleteTable("persons", alice.getClass()));
-
-            printJson(client.query(new QueryRequest("SELECT * FROM persons")));
+            repo.deleteAll();
 
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static interface PersonSurrealRepository extends SurrealRepository<Person>{
+        @Query("SELECT * FROM persons WHERE name = 'alice'")
+        public Person findAlice();
+
+        @Query("SELECT * FROM persons WHERE name = $name")
+        public Person findByName(@Variable("name") String name);
+
+        @Query("SELECT * FROM persons WHERE name = $name")
+        public List<Person> findAllByName(@Variable("name") String name);
     }
 
     private static void printJson(Object object) {
@@ -61,9 +71,9 @@ public class Main {
         }
     }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonIgnoreProperties(ignoreUnknown = true)
+    @Entity
     public static class Person{
+        @Id
         private String id;
         private String name;
 

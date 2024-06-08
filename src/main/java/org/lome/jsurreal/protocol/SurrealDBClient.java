@@ -3,6 +3,7 @@ package org.lome.jsurreal.protocol;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.netty.ws.NettyWebSocket;
+import org.asynchttpclient.ws.WebSocket;
 import org.asynchttpclient.ws.WebSocketListener;
 import org.asynchttpclient.ws.WebSocketUpgradeHandler;
 import org.lome.jsurreal.protocol.command.*;
@@ -10,6 +11,9 @@ import org.lome.jsurreal.protocol.exception.ConnectionClosedException;
 import org.lome.jsurreal.protocol.exception.RequestLimitExceededException;
 import org.lome.jsurreal.protocol.exception.RequestTimeoutException;
 import org.lome.jsurreal.protocol.exception.SurrealCallException;
+import org.lome.jsurreal.util.JsonMapperProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
@@ -19,9 +23,10 @@ import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 public class SurrealDBClient implements AutoCloseable {
 
+    final static Logger logger = LoggerFactory.getLogger(SurrealDBClient.class);
     final static int MAX_REQUEST_ID = (int)1e9;
     final static int MAX_CONCURRENT_REQUEST = (int)1e5;
-    final static ObjectMapper objectMapper = new ObjectMapper();
+    final static ObjectMapper objectMapper = JsonMapperProvider.getObjectMapper();
 
     final String host;
     final int port;
@@ -104,13 +109,13 @@ public class SurrealDBClient implements AutoCloseable {
                                 StringBuilder messageBuilder = new StringBuilder();
 
                                 @Override
-                                public void onOpen(org.asynchttpclient.ws.WebSocket webSocket) {
+                                public void onOpen(WebSocket webSocket) {
                                     // TODO: Log here
                                     waitOpen.offer(new Object());
                                 }
 
                                 @Override
-                                public void onClose(org.asynchttpclient.ws.WebSocket webSocket, int i, String s) {
+                                public void onClose(WebSocket webSocket, int i, String s) {
                                     // TODO: Log & Handle
                                 }
 
@@ -130,6 +135,7 @@ public class SurrealDBClient implements AutoCloseable {
                                     messageBuilder.append(payload);
                                     if (finalFragment){
                                         messageDispatchingQueue.add(messageBuilder.toString());
+                                        logger.debug("Received response: {}", messageBuilder.toString());
                                         messageBuilder = new StringBuilder();
                                     }
                                 }
@@ -219,7 +225,9 @@ public class SurrealDBClient implements AutoCloseable {
         public SurrealResponse call() throws Exception {
             try {
                 if (isClosed()) throw new ConnectionClosedException();
-                webSocket.get().sendTextFrame(objectMapper.writeValueAsString(this.request));
+                String json = objectMapper.writeValueAsString(this.request);
+                logger.debug("Sending request: {}", json);
+                webSocket.get().sendTextFrame(json);
                 SurrealResponse response = queue.poll(timeout, TimeUnit.SECONDS);
                 if (response == null) {
                     throw new RequestTimeoutException();

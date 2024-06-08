@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Member;
 import java.util.*;
 
@@ -30,14 +31,15 @@ public class EntityMapper<T> {
     final Class<T> entityClass;
     final Class<?> proxyClass;
     final String tableName;
-    Field idField;
+    private PropertyDescriptor idField;
 
 
     public EntityMapper(Class<T> entityClass) {
         this.entityClass = entityClass;
         this.proxyClass = proxyClass();
         this.tableName = tableName();
-        logger.info("Table for {} is {}", entityClass, this.tableName);
+        logger.debug("Table for {} is {}", entityClass, this.tableName);
+        if (entityClass.getAnnotation(Entity.class) == null) throw new RuntimeException("Missing @Entity annotation");
     }
 
     private Class<?> proxyClass() {
@@ -46,6 +48,9 @@ public class EntityMapper<T> {
                 .subclass(Object.class)
                 .annotateType(AnnotationDescription.Builder.ofType(JsonInclude.class)
                         .define("value", JsonInclude.Include.NON_NULL)
+                        .build())
+                .annotateType(AnnotationDescription.Builder.ofType(JsonIgnoreProperties.class)
+                        .define("ignoreUnknown", false)
                         .build());
 
         for (PropertyDescriptor propertyDescriptor : ReflectUtils.getBeanProperties(entityClass)) {
@@ -57,7 +62,8 @@ public class EntityMapper<T> {
                     if (!field.getType().equals(String.class)){
                         throw new RuntimeException("@Id must a String field");
                     }
-                    idField = field;
+                    idField = propertyDescriptor;
+
                     proxyBuilder = proxyBuilder.defineField(field.getName(), field.getType(), Member.PUBLIC)
                             .annotateField(AnnotationDescription.Builder.ofType(JsonProperty.class)
                             .define("value", "id")
@@ -69,9 +75,7 @@ public class EntityMapper<T> {
                 if (columnAnnotation != null) {
                     String column = columnAnnotation.name();
                     if (StringUtil.isNullOrEmpty(column)) {
-                        logger.error("Error mapping @Column on {}:{} name is not defined",
-                                entityClass.getName(),
-                                field.getName());
+                        column = field.getName();
                     } else {
                         proxyBuilder = proxyBuilder.defineField(field.getName(), field.getType(), Member.PUBLIC)
                                 .annotateField(AnnotationDescription.Builder.ofType(JsonProperty.class)
@@ -89,7 +93,10 @@ public class EntityMapper<T> {
                     continue;
                 }
 
-                proxyBuilder = proxyBuilder.defineField(field.getName(), field.getType(), Member.PUBLIC);
+                proxyBuilder = proxyBuilder.defineField(field.getName(), field.getType(), Member.PUBLIC)
+                        .annotateField(AnnotationDescription.Builder.ofType(JsonProperty.class)
+                                .define("value", field.getName())
+                                .build());
 
             } catch (NoSuchFieldException e) {
                 logger.error("Error loading declared field: {}", propertyDescriptor.getName());
@@ -145,8 +152,10 @@ public class EntityMapper<T> {
 
     protected String getEntityId(T element){
         try {
-            return (String)idField.get(element);
+            return (String)idField.getReadMethod().invoke(element);
         } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
             throw new RuntimeException(e);
         }
     }
@@ -160,12 +169,14 @@ public class EntityMapper<T> {
     }
 
     private String fromClassName(Class<T> entityClass) {
-        String plural = English.plural(entityClass.getName());
+        String plural = English.plural(entityClass.getSimpleName());
         return normalizeName(plural);
     }
 
     private String normalizeName(String name){
-        return name.trim().replaceAll(".+([A-Z]).+","_$1").toLowerCase(Locale.ROOT);
+        return name.trim().replaceAll("([A-Z]+)","_$1")
+                .replaceAll("^_+","")
+                .replaceAll("_+$","").toLowerCase(Locale.ROOT);
     }
 
     public Class<T> getEntityClass() {
@@ -176,16 +187,4 @@ public class EntityMapper<T> {
         return tableName;
     }
 
-    public static void main(String[] args) throws JsonProcessingException {
-        EntityMapper<SampleEntity> repo = new EntityMapper(SampleEntity.class);
-
-        SampleEntity entity = new SampleEntity();
-        entity.setFuck("Alice");
-        Object proxied = repo.toProxy(entity);
-
-        System.out.println(new ObjectMapper().writeValueAsString(proxied));
-
-        SampleEntity alice = repo.fromProxy(proxied);
-        System.out.println(new ObjectMapper().writeValueAsString(alice));
-    }
 }
