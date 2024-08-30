@@ -8,10 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
+@Target({ElementType.TYPE_USE, ElementType.FIELD})
 @JacksonAnnotationsInside
-public @interface Query {
-
-    String value();
-
+public @interface EntityReference {
 }
